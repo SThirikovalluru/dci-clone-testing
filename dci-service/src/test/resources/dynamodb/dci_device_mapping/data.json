@@ -1,0 +1,79 @@
+{
+  "dci_device_mapping": [
+    {
+      "PutRequest": {
+        "Item": {
+          "dci_device_uid": {
+            "S": "100"
+          },
+          "protected_device_uid": {
+            "S": "789"
+          },
+          "serial_number": {
+            "S": "963852147"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "dci_device_uid": {
+            "S": "269"
+          },
+          "protected_device_uid": {
+            "S": "441"
+          },
+          "serial_number": {
+            "S": "789654123"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "dci_device_uid": {
+            "S": "439"
+          },
+          "protected_device_uid": {
+            "S": "941"
+          },
+          "serial_number": {
+            "S": "852146973"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "dci_device_uid": {
+            "S": "123"
+          },
+          "protected_device_uid": {
+            "S": "555"
+          },
+          "serial_number": {
+            "S": "132465789"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "dci_device_uid": {
+            "S": "159"
+          },
+          "protected_device_uid": {
+            "S": "888"
+          },
+          "serial_number": {
+            "S": "915847623"
+          }
+        }
+      }
+    }
+  ]
+}

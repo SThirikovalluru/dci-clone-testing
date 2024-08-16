@@ -1,0 +1,46 @@
+{
+  "variables": {
+    "build_number": "{{env `BUILD_NUMBER`}}",
+    "platform_long_name":   "{{env `DOCKER_REPO`}}",
+    "ecr_repo": "649815474472.dkr.ecr.eu-west-1.amazonaws.com"
+  },
+  "builders": [{
+    "type": "docker",
+    "image": "{{user `ecr_repo`}}/base_images:ubuntu22.correttojava17",
+    "commit": "true"
+  }],
+  "provisioners": [{
+    "type": "shell",
+    "inline": [
+      "sleep 10",
+      "apt-get update",
+      "apt-get upgrade -y",
+      "apt-get dist-upgrade -y",
+      "apt-get autoremove -y",
+      "mkdir -p /opt/dci-service"
+    ]
+  },
+  {
+    "type": "file",
+    "source": "target/dci-service.jar",
+    "destination": "/opt/dci-service/"
+  }],
+  "post-processors": [
+    [
+      {
+        "type": "docker-tag",
+        "repository": "{{user `ecr_repo`}}/dci-service_{{user `platform_long_name`}}-branch",
+        "tag": "latest"
+      },
+      "docker-push"
+    ],
+    [
+      {
+        "type": "docker-tag",
+        "repository": "{{user `ecr_repo`}}/dci-service_{{user `platform_long_name`}}-branch",
+        "tag": "dci-service_v{{user `build_number`}}"
+      },
+      "docker-push"
+    ]
+  ]
+}

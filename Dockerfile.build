@@ -1,0 +1,12 @@
+FROM 649815474472.dkr.ecr.eu-west-1.amazonaws.com/base_images:ubuntu22.correttojava17
+
+# WORKDIR /dci-service
+
+RUN sleep 10 && \
+    apt-get update && \
+    apt-get upgrade -y && \
+    apt-get dist-upgrade -y && \
+    apt-get autoremove -y && \
+    mkdir -p /opt/dci-service
+
+COPY ./dci-service/target/dci-service.jar /opt/dci-service/dci-service.jar

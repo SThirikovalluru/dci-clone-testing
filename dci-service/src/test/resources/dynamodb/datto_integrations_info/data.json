@@ -1,0 +1,79 @@
+{
+  "datto_integrations_info": [
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "1"
+          },
+          "portal_public_key": {
+            "S": "10"
+          },
+          "portal_secret_key": {
+            "S": "10-secret"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "2"
+          },
+          "portal_public_key": {
+            "S": "20"
+          },
+          "portal_secret_key": {
+            "S": "20-secret"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "3"
+          },
+          "portal_public_key": {
+            "S": "30"
+          },
+          "portal_secret_key": {
+            "S": "30-secret"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "4"
+          },
+          "portal_public_key": {
+            "S": "40"
+          },
+          "portal_secret_key": {
+            "S": "40-secret"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "5"
+          },
+          "portal_public_key": {
+            "S": "50"
+          },
+          "portal_secret_key": {
+            "S": "50-secret"
+          }
+        }
+      }
+    }
+  ]
+}

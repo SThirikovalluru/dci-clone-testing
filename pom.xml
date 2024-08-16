@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>net.datto</groupId>
+    <artifactId>dci</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>dci-service</module>
+        <module>dci-api</module>
+    </modules>
+
+    <distributionManagement>
+        <repository>
+            <id>autotask.aem.internal</id>
+            <name>Internal Release Repository</name>
+            <url>http://csrepo.centrastage.net:8080/repository/internal</url>
+        </repository>
+        <snapshotRepository>
+            <id>autotask.aem.snapshots</id>
+            <name>Internal Snapshot Repository</name>
+            <url>https://csrepo.centrastage.net/repository/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+</project>

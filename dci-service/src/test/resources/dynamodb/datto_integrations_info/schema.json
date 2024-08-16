@@ -1,0 +1,19 @@
+{
+  "TableName": "datto_integrations_info",
+  "KeySchema": [
+    {
+      "AttributeName": "rmm_account_uid",
+      "KeyType": "HASH"
+    }
+  ],
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "rmm_account_uid",
+      "AttributeType": "S"
+    }
+  ],
+  "ProvisionedThroughput": {
+    "ReadCapacityUnits": 5,
+    "WriteCapacityUnits": 5
+  }
+}

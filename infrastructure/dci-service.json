@@ -1,0 +1,321 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "Docker DCI Service",
+  "Parameters": {
+    "Platform": {
+      "Type": "String",
+      "AllowedValues" : ["sandbox", "deva", "devb", "staging", "pandastg", "syrah", "concord", "zinfandel", "merlot", "pinotage", "panda", "bacchus", "vidal"],
+      "Default" : "sandbox",
+      "Description": "The name of the platform"
+    },
+    "ContainerImage": {
+      "Type": "String",
+      "Default": "",
+      "Description": "The URI of the docker container for ATI"
+    }
+  },
+  "Conditions" : {
+    "IsStaging" : { "Fn::Equals" : [ { "Ref" : "Platform" }, "staging" ] },
+    "IsSandbox" : { "Fn::Equals" : [ { "Ref" : "Platform" }, "sandbox" ] }
+  },
+  "Resources": {
+    "DCIServiceTaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "${Platform}-dci-service-task-role"},
+        "AssumeRolePolicyDocument": {
+          "Version" : "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": { "Service": [ "ecs-tasks.amazonaws.com" ]},
+            "Action": [ "sts:AssumeRole" ]
+          }]
+        },
+        "Path": "/",
+        "PermissionsBoundary": {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:policy/DefaultUserPermissionBoundaries"},
+        "Policies": [
+          {
+            "PolicyName": "SSMReadAccess",
+            "PolicyDocument": {
+              "Version" : "2012-10-17",
+              "Statement": [ {
+                "Effect": "Allow",
+                "Action": [
+                  "ssm:GetParametersByPath",
+                  "ssm:GetParameter"
+                ],
+                "Resource": [
+                  {"Fn::Sub": "arn:aws:ssm:*:*:parameter/${Platform}/shared/*"},
+                  {"Fn::Sub": "arn:aws:ssm:*:*:parameter/${Platform}/dci-service/*"}
+                ]
+              } ]
+            }
+          },
+          {
+            "PolicyName": "SQSAccess",
+            "PolicyDocument": {
+              "Version" : "2012-10-17",
+              "Statement": [ {
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:DeleteMessage",
+                  "sqs:GetQueueUrl",
+                  "sqs:ChangeMessageVisibility",
+                  "sqs:DeleteMessageBatch",
+                  "sqs:SendMessageBatch",
+                  "sqs:ReceiveMessage",
+                  "sqs:SendMessage",
+                  "sqs:GetQueueAttributes",
+                  "sqs:CreateQueue",
+                  "sqs:ChangeMessageVisibilityBatch"
+                ],
+                "Resource":
+                [
+                  {"Fn::Sub": "arn:aws:sqs:*:*:${Platform}DCIDeviceQueue.fifo"}
+                ]
+              } ]
+            }
+          },
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version" : "2012-10-17",
+              "Statement": [ {
+                "Effect": "Allow",
+                "Action": [
+                  "dynamodb:BatchGetItem",
+                  "dynamodb:DescribeTable",
+                  "dynamodb:GetItem",
+                  "dynamodb:PutItem",
+                  "dynamodb:UpdateItem",
+                  "dynamodb:Scan",
+                  "dynamodb:Query",
+                  "dynamodb:GetRecords",
+                  "dynamodb:DeleteItem",
+                  "dynamodb:BatchWriteItem",
+                  "dynamodb:CreateTable"
+                ],
+                "Resource": [
+                  {"Fn::Sub": "arn:aws:dynamodb:*:*:table/datto_integrations_info"},
+                  {"Fn::Sub": "arn:aws:dynamodb:*:*:table/dci_device_mapping"},
+                  {"Fn::Sub": "arn:aws:dynamodb:*:*:table/dci_site_mapping"}
+                ]
+              } ]
+            }
+          }
+         ]
+      }
+    },
+    "DCIALBSG" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupName" : {"Fn::Sub": "${Platform}-DCIALBSG"},
+        "GroupDescription" : "DCI ALB Security Group",
+        "SecurityGroupIngress" : [
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "8080",
+            "ToPort" : "8080",
+            "CidrIp" : {"Fn::ImportValue" : {"Fn::Sub": "${Platform}CIDRBlock"}}
+          },
+          {
+            "IpProtocol" : "tcp",
+            "FromPort" : "8080",
+            "ToPort" : "8080",
+            "CidrIp" : {"Fn::ImportValue" : {"Fn::Sub": "${Platform}PrivateCIDRBlock"}}
+          }
+        ],
+        "VpcId" : {"Fn::ImportValue" : {"Fn::Sub": "${Platform}VpcId"}}
+      }
+    },
+    "DCIALB": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Scheme":"internal",
+        "Name" : {"Fn::Sub": "${Platform}-dci"},
+        "LoadBalancerAttributes" : [
+          { "Key" : "idle_timeout.timeout_seconds", "Value" : "60" },
+          { "Key" : "access_logs.s3.enabled", "Value" : "true"},
+          { "Key" : "access_logs.s3.bucket", "Value" : {
+            "Fn::If" : [
+              "IsStaging",
+              {"Fn::Sub": "${Platform}-lbs-logs"},
+              { "Fn::If" : [
+                "IsSandbox",
+                {"Fn::Sub":"${Platform}-lbs-logs"},
+                {"Fn::Sub":"${Platform}-lb-logs"}
+              ] }
+            ] }
+          },
+          { "Key" : "access_logs.s3.prefix", "Value" : "dci"}
+        ],
+        "SecurityGroups": [ { "Ref": "DCIALBSG" } ],
+        "Subnets": { "Fn::Split": [",", {"Fn::ImportValue" : {"Fn::Sub": "${Platform}PrivateSubnetIDs"} } ] },
+        "Type" : "application",
+        "IpAddressType" : "ipv4"
+      }
+    },
+    "DCITargetGroup" : {
+      "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "DependsOn":"DCIALB",
+      "Properties" : {
+        "HealthCheckIntervalSeconds": "30",
+        "HealthCheckPath" : "/status",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckPort" : "traffic-port",
+        "HealthCheckTimeoutSeconds": "5",
+        "HealthyThresholdCount": "2",
+        "UnhealthyThresholdCount": "2",
+        "Matcher" : { "HttpCode" : "200" },
+        "Name": {"Fn::Sub": "${Platform}-dci"},
+        "Port": "8080",
+        "Protocol": "HTTP",
+        "TargetGroupAttributes": [{
+          "Key": "deregistration_delay.timeout_seconds",
+          "Value": "20"
+        }],
+        "VpcId": {"Fn::ImportValue" : {"Fn::Sub": "${Platform}VpcId"}}
+      }
+    },
+    "DCIALBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "DefaultActions": [{
+          "Type": "forward",
+          "TargetGroupArn": { "Ref": "DCITargetGroup" }
+        }],
+        "LoadBalancerArn": { "Ref": "DCIALB" },
+        "Port": "8080",
+        "Protocol": "HTTP"
+      }
+    },
+    "DCITask": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties" : {
+        "Family" : {"Fn::Sub": "${Platform}-dci"},
+        "NetworkMode" : "bridge",
+        "TaskRoleArn" : { "Ref": "DCIServiceTaskRole" },
+        "ContainerDefinitions" : [
+          {
+            "Name": "dci_container",
+            "Hostname": {"Fn::Sub": "${Platform}-dci"},
+            "Image": { "Fn::Sub": "${ContainerImage}"},
+            "Memory":"768",
+            "MemoryReservation":"512",
+            "PortMappings":[
+              {
+                "ContainerPort": "8080",
+                "HostPort": "0",
+                "Protocol" : "tcp"
+              }
+            ],
+            "Cpu": "512",
+            "Essential": "true",
+            "DnsServers" : [ {"Fn::ImportValue" : {"Fn::Sub": "${Platform}DNSServers"}} ],
+            "DnsSearchDomains" : [ {"Fn::ImportValue" : {"Fn::Sub": "${Platform}DNSSearchDomains"}} ],
+            "EntryPoint" : [ "/usr/bin/java","-Djdk.xml.entityExpansionLimit=0","-Dsun.net.inetaddr.ttl=30","-jar" ],
+            "Command" : [ "/opt/dci-service/dci-service.jar" ],
+            "Environment" : [
+              {
+                "Name" : "PLATFORM_NAME",
+                "Value" : { "Ref": "Platform"}
+              }
+            ],
+            "LogConfiguration" : {
+              "LogDriver" : "awslogs",
+              "Options" : { "awslogs-group":{"Fn::Sub": "${Platform}-docker"}, "awslogs-region":{"Fn::Sub": "${AWS::Region}"}, "awslogs-stream-prefix":"dci" }
+            }
+          }
+        ]
+      }
+    },
+    "DCIService": {
+      "Type" : "AWS::ECS::Service",
+      "DependsOn":"DCIALBListener",
+      "Properties" : {
+        "Cluster" : {"Fn::ImportValue" : {"Fn::Sub": "${Platform}ECSSpotClusterARN"}},
+        "DeploymentConfiguration" : {
+          "MaximumPercent" : "200",
+          "MinimumHealthyPercent" : "100"
+        },
+        "DesiredCount" : "2",
+        "LoadBalancers" : [{
+          "TargetGroupArn" : {"Ref": "DCITargetGroup"},
+          "ContainerPort" : "8080",
+          "ContainerName" : "dci_container"
+        }],
+        "Role" : {"Fn::ImportValue" : {"Fn::Sub": "${Platform}ECSServiceRoleARN"}},
+        "PlacementStrategies" : [
+          {
+            "Field" : "attribute:ecs.availability-zone",
+            "Type" : "spread"
+          },
+          {
+            "Type" : "binpack",
+            "Field" : "memory"
+          }
+        ],
+        "ServiceName" : "DCI",
+        "Tags": [{
+          "Key" : "Application",
+          "Value" : "DCIService-Service"
+        },
+        {
+          "Key" : "Project",
+          "Value" : "DCI"
+        }],
+        "PropagateTags": "SERVICE",
+        "TaskDefinition" : { "Ref": "DCITask"}
+      }
+    },
+    "DCIDNSRecord": {
+      "Type" : "AWS::Route53::RecordSet",
+      "Properties" : {
+        "HostedZoneId": {"Fn::ImportValue" : {"Fn::Sub": "${Platform}AemLocalDnsId"}},
+        "Comment" : "DCI internal ALB",
+        "Name" : "dci.aem.local",
+        "Type" : "A",
+        "AliasTarget" : {
+          "DNSName" : { "Fn::GetAtt" : [ "DCIALB", "DNSName" ] },
+          "EvaluateTargetHealth" : "false",
+          "HostedZoneId" : { "Fn::GetAtt" : [ "DCIALB", "CanonicalHostedZoneID" ] }
+        }
+      }
+    },
+    "DCIDeviceQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "FifoQueue": true,
+        "ContentBasedDeduplication" : true,
+        "QueueName": { "Fn::Sub": "${Platform}DCIDeviceQueue.fifo"}
+      }
+    },
+    "DCIServiceScalableTarget": {
+      "Type" : "AWS::ApplicationAutoScaling::ScalableTarget",
+      "DependsOn":["DCIService"],
+      "Properties" : {
+        "MaxCapacity" : 10,
+        "MinCapacity" : 2,
+        "ResourceId" : {"Fn::Sub": "service/${Platform}-spot/DCI"},
+        "RoleARN" : {"Fn::ImportValue" : {"Fn::Sub": "${Platform}AutoScalingRoleARN"}},
+        "ScalableDimension" : "ecs:service:DesiredCount",
+        "ServiceNamespace" : "ecs"
+      }
+    },
+    "DCIServiceScalingPolicy": {
+      "Type" : "AWS::ApplicationAutoScaling::ScalingPolicy",
+      "DependsOn":["DCIServiceScalableTarget"],
+      "Properties" : {
+        "PolicyName" : {"Fn::Sub": "${Platform}-dci-scaling-policy"},
+        "PolicyType" : "TargetTrackingScaling",
+        "ScalingTargetId" : { "Ref":"DCIServiceScalableTarget" },
+        "TargetTrackingScalingPolicyConfiguration" : {
+          "TargetValue":90.0,
+          "ScaleInCooldown":120,
+          "ScaleOutCooldown":120,
+          "PredefinedMetricSpecification":{ "PredefinedMetricType":"ECSServiceAverageCPUUtilization" }
+        }
+      }
+    }
+  }
+}

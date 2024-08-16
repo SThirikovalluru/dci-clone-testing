@@ -1,0 +1,19 @@
+server:
+  port: 8087
+
+platform:
+  name: "localstack"
+
+dci:
+  readTimeout: 10000
+  connectTimeout: 10000
+  localstack:
+    enabled: true
+
+sqs:
+  queues:
+    dattoContinuityDeviceQueue: "test"
+
+aes:
+  codec:
+    password: "pass"

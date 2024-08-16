@@ -1,0 +1,139 @@
+{
+  "dci_site_mapping": [
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "1"
+          },
+          "serial_number": {
+            "S": "233"
+          },
+          "rmm_site_uid": {
+            "S": "456"
+          },
+          "name": {
+            "S": "first"
+          },
+          "model": {
+            "S": "ram"
+          },
+          "internal_ip": {
+            "S": "125.584.0.1"
+          },
+          "client_company_name": {
+            "S": "kaseya"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "2"
+          },
+          "serial_number": {
+            "S": "533"
+          },
+          "rmm_site_uid": {
+            "S": "956"
+          },
+          "name": {
+            "S": "second"
+          },
+          "model": {
+            "S": "dodge"
+          },
+          "internal_ip": {
+            "S": "255.127.0.8"
+          },
+          "client_company_name": {
+            "S": "datto"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "3"
+          },
+          "serial_number": {
+            "S": "445"
+          },
+          "rmm_site_uid": {
+            "S": "964"
+          },
+          "name": {
+            "S": "fifth"
+          },
+          "model": {
+            "S": "seat"
+          },
+          "internal_ip": {
+            "S": "8.7.6.5"
+          },
+          "client_company_name": {
+            "S": "datto"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "4"
+          },
+          "serial_number": {
+            "S": "224444556"
+          },
+          "rmm_site_uid": {
+            "S": "972"
+          },
+          "name": {
+            "S": "other_one"
+          },
+          "model": {
+            "S": "exceo"
+          },
+          "internal_ip": {
+            "S": "52.71.56.1"
+          },
+          "client_company_name": {
+            "S": "datto"
+          }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "rmm_account_uid": {
+            "S": "5"
+          },
+          "serial_number": {
+            "S": "45369874"
+          },
+          "rmm_site_uid": {
+            "S": "741"
+          },
+          "name": {
+            "S": "name"
+          },
+          "model": {
+            "S": "schelby"
+          },
+          "internal_ip": {
+            "S": "127.1.0.8"
+          },
+          "client_company_name": {
+            "S": "kaseya"
+          }
+        }
+      }
+    }
+  ]
+}

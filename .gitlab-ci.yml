@@ -1,0 +1,337 @@
+default:
+  image: 649815474472.dkr.ecr.eu-west-1.amazonaws.com/rmmbuilds:rmm-maven-3.8.6-amazoncorretto-17 
+  interruptible: true
+  tags:
+    - "rmm-eks"
+
+variables:
+  SERVICE_NAME: "dci-service"
+  DEVELOP_REPO: "develop_dci"
+  RELEASE_REPO: "release_dci"
+  MAVEN_OPTS: "-Dhttps.protocols=TLSv1.2 -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"#
+
+stages:
+  - prepare
+  - build
+  - test
+  - containerize
+  - deploy
+  - release
+
+include:
+  - project: "rmm/repos/internal-tools/rmm-gpm"
+    file: "rmm-ecs-deploy.yml"
+  - project: "rmm/repos/internal-tools/rmm-gpm"
+    file: "rmm-versioning.yml"
+  - project: "rmm/repos/internal-tools/rmm-gpm"
+    file: "rmm-cloudformation-deploy.yml"
+  - project: "rmm/repos/internal-tools/rmm-gpm"
+    file: "rmm-common-testing.yml"
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "development"'
+      variables:
+        BUILD_TYPE: "sandbox"
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      variables:
+        BUILD_TYPE: "trunk"
+    - if: '$CI_COMMIT_BRANCH == "maint"'
+      variables:
+        BUILD_TYPE: "trunk"
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/.*$/'
+      variables:
+        BUILD_TYPE: "release"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        BUILD_TYPE: "merge-request"
+
+versioning:
+  stage: prepare
+  extends: ".versioning"
+  script:
+    - |
+      echo "Generating Version Number..."
+      if [[ $BUILD_TYPE == "release" ]]; then
+        patch_version
+        VERSION_NUMBER=$(cat version.txt)-${CI_PIPELINE_IID}_${CI_COMMIT_SHORT_SHA} 
+      else
+        VERSION_NUMBER=${CI_PIPELINE_IID}_${CI_COMMIT_SHORT_SHA} 
+      fi
+      echo "VERSION_NUMBER=$VERSION_NUMBER" >> build.env
+      echo $VERSION_NUMBER
+  artifacts:
+    reports:
+      dotenv: build.env
+    expire_in: "never"
+  rules:
+    - if: $BUILD_TYPE == "trunk"
+    - if: $BUILD_TYPE == "release"
+    - if: $BUILD_TYPE == "sandbox"
+    - if: $BUILD_TYPE == "maint"
+
+build:
+  stage: build
+  script:
+    - BUILD_NUMBER=${VERSION_NUMBER} mvn package -Dmaven.test.skip=true
+  artifacts:
+    paths:
+      - ./dci-service
+    expire_in: 1 day
+  rules:
+    - if: $BUILD_TYPE == "trunk"
+    - if: $BUILD_TYPE == "release"
+    - if: $BUILD_TYPE == "sandbox"
+    - if: $BUILD_TYPE == "maint"
+
+snyk:
+  stage: "test"
+  extends: ".snyk"
+  allow_failure: true
+  needs:
+    - "build"
+  variables:
+    SNYK_IMAGE: "snyk/snyk:maven-3-jdk-11"
+    SNYK_PROJECT: "/plat/dci-service"
+    DRY_RUN: "false"
+    SNYK_SCAN_ALL_PROJECTS: "true"
+    SNYK_SCAN_ORG: "devb"
+  before_script:
+    - |
+      if [[ $BUILD_TYPE == "trunk" ]]; then
+        export SNYK_SCAN_ORG="devb"
+      else 
+        export SNYK_SCAN_ORG="sandbox"
+      fi
+  rules:
+    - if: $BUILD_TYPE == "trunk"
+    - if: $BUILD_TYPE == "sandbox"
+    - if: $BUILD_TYPE == "maint"
+
+unit_test:
+  stage: test
+  script:
+    - echo "${SERVICE_NAME} has no unit tests"
+  rules:
+    - if: $BUILD_TYPE == "trunk"
+    - if: $BUILD_TYPE == "release"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+containerize_dev:
+  stage: "containerize"
+  extends: ".common-containerize"
+  needs:
+    - build
+    - versioning
+  variables:
+    ECR_DESTINATION: "$DEVELOP_REPO:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "trunk"
+    - if: $BUILD_TYPE == "sandbox"
+    - if: $BUILD_TYPE == "maint"
+
+.common-deploy:
+  stage: "deploy"
+  needs:
+    - containerize_dev
+    - versioning
+  extends:
+    - ".common-cloudformation-deploy"
+  dependencies:
+    - "versioning"
+  allow_failure: true # So pipeline ends green
+  resource_group: AWS-DCI-deploy-${PLATFORM_NAME}
+  variables:
+    GIT_STRATEGY: fetch
+    CLOUDFORMATION_TEMPLATE_FILE: "./infrastructure/dci-service.json"
+    CLOUDFORMATION_TAGS: "Application=DCI-Service"
+    DEPLOY_VERSION: "${VERSION_NUMBER}"
+
+containerize_release:
+  stage: "containerize"
+  extends: ".common-containerize"
+  needs:
+    - build
+    - versioning
+  variables:
+    ECR_DESTINATION: "$RELEASE_REPO:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "release"
+
+create_release:
+  stage: "release"
+  extends: ".versioning"
+  dependencies: []
+  allow_failure: true # So pipeline ends green
+  script:
+    - create_release_version
+  rules:
+    - if: $BUILD_TYPE == "trunk"
+      when: manual
+
+deploy_sandbox:
+  extends: ".common-deploy"
+  environment:
+    name: "sandbox"
+    deployment_tier: "testing" 
+  before_script: 
+    - |
+      if [[ $BUILD_TYPE == "trunk" ]]; then
+        git fetch
+        if git show-ref --quiet refs/remotes/origin/develop; then
+          echo "develop branch exists - We'll not deploy to sandbox from trunk. Use develop branch instead"
+          exit 0
+        fi
+      fi
+  variables:
+    PLATFORM_NAME: "sandbox"
+    CLOUDFORMATION_STACK_NAME: "SandboxDCI"
+    CLOUDFORMATION_PARAMETERS: "Platform=sandbox ContainerImage=649815474472.dkr.ecr.eu-west-1.amazonaws.com/${DEVELOP_REPO}:${VERSION_NUMBER} CreateDciQueues=No"
+  rules:
+    - if: $BUILD_TYPE == "sandbox"
+    - if: $BUILD_TYPE == "trunk"
+
+deploy_devb:
+  extends: ".common-deploy"
+  environment:
+    name: "devb"
+    deployment_tier: "testing"
+  needs:
+    - "containerize_dev"
+    - "versioning"
+  variables:
+    PLATFORM_NAME: "devb"
+    CLOUDFORMATION_STACK_NAME: "DevBDCIService"
+    CLOUDFORMATION_PARAMETERS: "Platform=devb ContainerImage=649815474472.dkr.ecr.eu-west-1.amazonaws.com/${DEVELOP_REPO}:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "trunk"
+      when: manual
+  
+deploy_staging:
+  extends: ".common-deploy"
+  environment:
+    name: "staging"
+    deployment_tier: "staging" 
+  needs:
+    - "containerize_release"
+    - "versioning"
+  variables:
+    PLATFORM_NAME: "staging"
+    CLOUDFORMATION_STACK_NAME: "StagingDCIService"
+    CLOUDFORMATION_PARAMETERS: "Platform=staging ContainerImage=649815474472.dkr.ecr.eu-west-1.amazonaws.com/${RELEASE_REPO}:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "release"
+      when: manual
+
+deploy_bacchus:
+  extends: ".common-deploy"
+  environment:
+    name: "bacchus"
+    deployment_tier: "other"
+  needs:
+    - "containerize_release"
+    - "versioning"
+  variables:
+    PLATFORM_NAME: "bacchus"
+    CLOUDFORMATION_STACK_NAME: "BacchusDCIService"
+    CLOUDFORMATION_PARAMETERS: "Platform=bacchus ContainerImage=649815474472.dkr.ecr.us-east-1.amazonaws.com/${RELEASE_REPO}:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "release"
+      when: manual
+
+
+deploy_pinotage:
+  extends: ".common-deploy"
+  environment:
+    name: "pinotage"
+    deployment_tier: "production"
+  needs:
+    - "containerize_release"
+    - "versioning"
+  variables:
+    PLATFORM_NAME: "pinotage"
+    CLOUDFORMATION_STACK_NAME: "DCIService"
+    CLOUDFORMATION_PARAMETERS: "Platform=pinotage ContainerImage=649815474472.dkr.ecr.eu-west-1.amazonaws.com/${RELEASE_REPO}:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "release"
+      when: manual
+
+deploy_concord:
+  extends: ".common-deploy"
+  environment:
+    name: "concord"
+    deployment_tier: "production"
+  needs:
+    - "containerize_release"
+    - "versioning"
+  variables:
+    PLATFORM_NAME: "concord"
+    CLOUDFORMATION_STACK_NAME: "DCIService"
+    CLOUDFORMATION_PARAMETERS: "Platform=concord ContainerImage=649815474472.dkr.ecr.us-east-1.amazonaws.com/${RELEASE_REPO}:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "release"
+      when: manual
+
+deploy_merlot:
+  extends: ".common-deploy"
+  environment:
+    name: "merlot"
+    deployment_tier: "production"
+  needs:
+    - "containerize_release"
+    - "versioning"
+  variables:
+    PLATFORM_NAME: "merlot"
+    CLOUDFORMATION_STACK_NAME: "DCIService"
+    CLOUDFORMATION_PARAMETERS: "Platform=merlot ContainerImage=649815474472.dkr.ecr.eu-west-1.amazonaws.com/${RELEASE_REPO}:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "release"
+      when: manual
+
+deploy_syrah:
+  extends: ".common-deploy"
+  environment:
+    name: "syrah"
+    deployment_tier: "production"
+  needs:
+    - "containerize_release"
+    - "versioning"
+  variables:
+    PLATFORM_NAME: "syrah"
+    CLOUDFORMATION_STACK_NAME: "DCIService"
+    CLOUDFORMATION_PARAMETERS: "Platform=syrah ContainerImage=649815474472.dkr.ecr.ap-southeast-2.amazonaws.com/${RELEASE_REPO}:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "release"
+      when: manual
+
+deploy_zinfandel:
+  extends: ".common-deploy"
+  environment:
+    name: "zinfandel"
+    deployment_tier: "production"
+  needs:
+    - "containerize_release"
+    - "versioning"
+  variables:
+    PLATFORM_NAME: "zinfandel"
+    CLOUDFORMATION_STACK_NAME: "DCIService"
+    CLOUDFORMATION_PARAMETERS: "Platform=zinfandel ContainerImage=649815474472.dkr.ecr.us-west-2.amazonaws.com/${RELEASE_REPO}:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "release"
+      when: manual
+
+deploy_vidal:
+  extends: ".common-deploy"
+  environment:
+    name: "vidal"
+    deployment_tier: "production"
+  needs:
+    - "containerize_release"
+    - "versioning"
+  variables:
+    PLATFORM_NAME: "vidal"
+    CLOUDFORMATION_STACK_NAME: "DCIService"
+    CLOUDFORMATION_PARAMETERS: "Platform=vidal ContainerImage=649815474472.dkr.ecr.us-east-1.amazonaws.com/${RELEASE_REPO}:${VERSION_NUMBER}"
+  rules:
+    - if: $BUILD_TYPE == "release"
+      when: manual

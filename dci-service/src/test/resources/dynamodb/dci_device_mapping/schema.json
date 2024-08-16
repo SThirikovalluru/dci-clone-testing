@@ -1,0 +1,27 @@
+{
+  "TableName": "dci_device_mapping",
+  "KeySchema": [
+    {
+      "AttributeName": "dci_device_uid",
+      "KeyType": "HASH"
+    },
+    {
+      "AttributeName": "protected_device_uid",
+      "KeyType": "RANGE"
+    }
+  ],
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "dci_device_uid",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "protected_device_uid",
+      "AttributeType": "S"
+    }
+  ],
+  "ProvisionedThroughput": {
+    "ReadCapacityUnits": 5,
+    "WriteCapacityUnits": 5
+  }
+}
