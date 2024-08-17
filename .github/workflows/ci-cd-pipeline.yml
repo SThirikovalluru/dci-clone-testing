@@ -1,0 +1,158 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main 
+
+env:
+  SERVICE_NAME: "dci-service"
+  DEVELOP_REPO: "develop_dci"
+  RELEASE_REPO: "release_dci"
+  MAVEN_OPTS: "-Dhttps.protocols=TLSv1.2 -Dmaven.repo.local=$GITHUB_WORKSPACE/.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"
+
+jobs:
+  versioning:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Generate Version Number
+        run: |
+          BUILD_TYPE=$(echo "${GITHUB_REF_NAME}" | grep -oP 'release/.*' || true)
+          if [[ "$BUILD_TYPE" != "" ]]; then
+            echo "release" > build_type.txt
+            patch_version
+            echo "VERSION_NUMBER=$(cat version.txt)-${GITHUB_RUN_ID}_${GITHUB_SHA::7}" >> build.env
+          else
+            echo "VERSION_NUMBER=${GITHUB_RUN_ID}_${GITHUB_SHA::7}" >> build.env
+          fi
+          cat build.env
+
+      - name: Persist build.env
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-env
+          path: build.env
+
+  build:
+    runs-on: ubuntu-latest
+    needs: versioning
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download build.env
+        uses: actions/download-artifact@v4
+        with:
+          name: build-env
+
+      - name: Build the application
+        run: |
+          source build.env
+          mvn package -Dmaven.test.skip=true
+
+      - name: Save build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: ./dci-service
+
+  snyk:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Snyk Security Scan
+        run: |
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            export SNYK_SCAN_ORG="devb"
+          else 
+            export SNYK_SCAN_ORG="sandbox"
+          fi
+          snyk test --org=$SNYK_SCAN_ORG --all-projects
+
+  unit_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip Unit Tests
+        run: echo "${{ env.SERVICE_NAME }} has no unit tests"
+
+  containerize_dev:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - versioning
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download build.env
+        uses: actions/download-artifact@v4
+        with:
+          name: build-env
+
+      - name: Containerize for Dev
+        run: |
+          source build.env
+          export ECR_DESTINATION="$DEVELOP_REPO:${VERSION_NUMBER}"
+          # Add your containerization commands here
+
+  containerize_release:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - versioning
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download build.env
+        uses: actions/download-artifact@v4
+        with:
+          name: build-env
+
+      - name: Containerize for Release
+        run: |
+          source build.env
+          export ECR_DESTINATION="$RELEASE_REPO:${VERSION_NUMBER}"
+          # Add your containerization commands here
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs:
+      - containerize_dev
+      - versioning
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download build.env
+        uses: actions/download-artifact@v4
+        with:
+          name: build-env
+
+      - name: Deploy to AWS
+        run: |
+          source build.env
+          export CLOUDFORMATION_TEMPLATE_FILE="./infrastructure/dci-service.json"
+          export CLOUDFORMATION_TAGS="Application=DCI-Service"
+          export DEPLOY_VERSION="${VERSION_NUMBER}"
+          # Add your CloudFormation deployment commands here
+
+  release:
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Create Release Version
+        run: |
+          # Your release version creation script
