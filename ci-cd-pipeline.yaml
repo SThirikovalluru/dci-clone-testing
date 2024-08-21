@@ -3,11 +3,10 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - development
-      - master
-      - maint
-      - 'release/**'
+      - main
   pull_request:
+    branches:
+      - main 
 
 env:
   SERVICE_NAME: "dci-service"
@@ -20,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Generate Version Number
         run: |
@@ -45,7 +44,7 @@ jobs:
     needs: versioning
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Download build.env
         uses: actions/download-artifact@v4
@@ -68,11 +67,11 @@ jobs:
     needs: build
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Snyk Security Scan
         run: |
-          if [[ "$GITHUB_REF_NAME" == "trunk" ]]; then
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
             export SNYK_SCAN_ORG="devb"
           else 
             export SNYK_SCAN_ORG="sandbox"
@@ -92,7 +91,7 @@ jobs:
       - versioning
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Download build.env
         uses: actions/download-artifact@v4
@@ -112,7 +111,7 @@ jobs:
       - versioning
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Download build.env
         uses: actions/download-artifact@v4
@@ -132,7 +131,7 @@ jobs:
       - versioning
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Download build.env
         uses: actions/download-artifact@v4
@@ -149,10 +148,10 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    if: github.ref_name == 'master'
+    if: github.ref_name == 'main'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Create Release Version
         run: |
