@@ -29,5 +29,4 @@ jobs:
         env:
           GITLAB_TOKEN: VqRMQWHUebiUqsyjTh6n
         run: |
-          git push https://VqRMQWHUebiUqsyjTh6n@gitlab.datto.net/rmm/repos/experiments/dci-clone-testing.git
- main
+          git push https://VqRMQWHUebiUqsyjTh6n@gitlab.datto.net/rmm/repos/experiments/dci-clone-testing.git main
