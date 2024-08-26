@@ -12,10 +12,10 @@ jobs:
 
     - name: Push to GitLab
       run: |
-        git remote add gitlab https://gitlab-ci-token:VqRMQWHUebiUqsyjTh6n@gitlab.com/sthirikovalluru/dci-clone-testing.git
+        git remote add gitlab https://gitlab-ci-token:apsAuuB5sEkKmixbVBoz@gitlab.com/sthirikovalluru/dci-clone-testing.git
         git push --mirror gitlab
       env:
-        GITLAB_TOKEN: VqRMQWHUebiUqsyjTh6n
+        GITLAB_TOKEN: apsAuuB5sEkKmixbVBoz
 
     - name: Trigger GitLab Pipeline via API
       run: |
