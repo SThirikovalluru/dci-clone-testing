@@ -1,9 +1,6 @@
 name: Mirror to GitLab
 
-on:
-  push:
-    branches:
-      - main  # Adjust if you are using a different branch
+on: [push]
 
 jobs:
   mirror:
@@ -14,7 +11,7 @@ jobs:
 
     - name: Push to GitLab
       run: |
-        git remote add gitlab https://gitlab-ci-token:VqRMQWHUebiUqsyjTh6n@gitlab.datto.net/rmm/repos/experiments/dci-clone-testing.git
+        git remote add gitlab https://VqRMQWHUebiUqsyjTh6n@gitlab.datto.net/rmm/repos/experiments/dci-clone-testing.git
         git push --mirror gitlab
       env:
         GITLAB_TOKEN: VqRMQWHUebiUqsyjTh6n
