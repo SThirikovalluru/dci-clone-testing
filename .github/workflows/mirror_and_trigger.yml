@@ -1,7 +1,9 @@
 name: Mirror and Trigger GitLab Pipeline
 
-on: [push]
-
+on:
+  push:
+    branches:
+      - main 
 jobs:
   mirror_and_trigger:
     runs-on: ubuntu-latest
