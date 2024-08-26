@@ -1,0 +1,28 @@
+name: Mirror and Trigger GitLab Pipeline
+
+on: [push]
+
+jobs:
+  mirror_and_trigger:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Push to GitLab
+      run: |
+        git remote add gitlab https://gitlab-ci-token:VqRMQWHUebiUqsyjTh6n@gitlab.com/sthirikovalluru/dci-clone-testing.git
+        git push --mirror gitlab
+    env:
+      GITLAB_TOKEN: VqRMQWHUebiUqsyjTh6n
+
+    - name: Trigger GitLab Pipeline via Webhook
+      run: |
+        curl --request POST \
+        --form token=glptt-7169fba3b1cd590dbe1ac933d5a4732de43d27b0 \
+        --form ref=main \
+        --form "variables[CI_COMMIT_MESSAGE]=$(git log -1 --pretty=%B)" \
+        https://gitlab.datto.net/api/v4/projects/22192/ref/REF_NAME/trigger/pipeline?token=TOKEN&variables[RUN_NIGHTLY_BUILD]=true
+    env:
+      GITLAB_TRIGGER_TOKEN: glptt-7169fba3b1cd590dbe1ac933d5a4732de43d27b0
