@@ -1,30 +1,25 @@
 name: Gitlab CI/CD
 
 on: 
-
   push:
-    branches: main
+    branches: 
+      - main
   pull_request:
-    branches: main
-
+    branches: 
+      - main
   workflow_dispatch:
 
-job: 
+jobs:  
 
   build: 
     runs-on: ubuntu-latest
 
     steps: 
-      -name: Trigger Gitlab
-       run: echo Trigger Gitlab CI/CD
-     - name: Trigger GitLab CI Job
-  # You may pin to the exact commit or the version.
-  # uses: appleboy/gitlab-ci-action@64e3a31d93c8b1242847366dbed93573fd10a591
-       uses: appleboy/gitlab-ci-action@v0.0.2
-       with:
-    # gitlab-ci token
-         token: glptt-7169fba3b1cd590dbe1ac933d5a4732de43d27b0
-    # gitlab-ci valid refs are only the branches and tags
-         ref: main
-    # gitlab project id
-         project_id: 22192
+      - name: Trigger Gitlab  
+        run: echo Trigger Gitlab CI/CD
+      - name: Trigger GitLab CI Job  
+        uses: appleboy/gitlab-ci-action@v0.0.2
+        with:
+          token: glptt-7169fba3b1cd590dbe1ac933d5a4732de43d27b0
+          ref: main
+          project_id: 22192
