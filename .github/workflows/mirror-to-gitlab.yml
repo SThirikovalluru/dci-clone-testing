@@ -5,9 +5,7 @@ on: [push]
 jobs:
   mirror:
     runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+
 
     - name: Push to GitLab
       run: |
